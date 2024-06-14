@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-demo-inference
+  namespace: llm
+  labels:
+    app: tgi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tgi
+  template:
+    metadata:
+      labels:
+        app: tgi
+    spec:
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+      containers:
+      - name: tgi-server
+        image: "ghcr.io/huggingface/text-generation-inference:2.0.4"
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+        args: ["--model-id","/model"]
+        volumeMounts:
+        - name: shared-data
+          mountPath: /model
+        ports:
+        - containerPort: 80
+          name: http-tgi
+      initContainers:
+      - name: model-downloader
+        image: "iad.ocir.io/idqr4wptq3qu/llm-blog/model-downloader:v1"
+        env:
+        - name: bucket
+          value: "<model_repo_bucket>"
+        - name: prefix
+          value: "<model_folder>"
+        - name: region
+          value: "<oci_region>"
+        - name: tenancy
+          value: "<oci_tenancy_id>"
+        volumeMounts:
+        - name: shared-data
+          mountPath: /model
+      serviceAccountName: oci-os-model-repo
+      volumes:
+      - name: shared-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tgi-server-service
+  namespace: llm
+  labels:
+    app: tgi
+spec:
+  type: ClusterIP
+  selector:
+    app: tgi
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http-inference-server
+    - port: 443
+      targetPort: 80
+      name: https-inference-server

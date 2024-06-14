@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-demo-webui
+  namespace: llm
+  labels:
+    app: gradio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gradio
+  template:
+    metadata:
+      labels:
+        app: gradio
+    spec:
+      containers:
+      - name: gradio
+        image: iad.ocir.io/idqr4wptq3qu/llm-blog/inference-client:v1
+        env:
+        - name: tgi_endpoint
+          value: "http://tgi-server-service"
+        - name: example1
+          value: "<your example prompt>"
+        - name: example2
+          value: "<your example prompt"
+        resources:
+        ports:
+        - containerPort: 7860
+          name: http-gradio
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-webui
+  namespace: llm
+  labels:
+    app: gradio
+  annotations:
+    oci.oraclecloud.com/oci-network-security-groups: "<your NSG ocid>"
+    service.beta.kubernetes.io/oci-load-balancer-security-list-management-mode: "None"
+spec:
+  type: LoadBalancer
+  selector:
+    app: gradio
+  ports:
+    - port: 7860
+      targetPort: 7860
+      name: http-webui-server
